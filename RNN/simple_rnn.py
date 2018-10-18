@@ -1,6 +1,7 @@
 #coding=utf-8
 import datetime
 import numpy as np
+import operator
 
 from math import *
 
@@ -68,19 +69,56 @@ class SimpleRNN(object):
         for t in np.arange(T)[::-1]:
             dldV = np.outer(delta_o[t], s[t].T)
             delta_t = self.V.T.dot(delta_o[t]) * (1 - (s[t] ** 2))
-            for bptt in np.arange(max(0, self._bptt_truncate), t + 1)[::-1]:
+            for bptt in np.arange(max(0, t - self._bptt_truncate), t + 1)[::-1]:
                 dldW += np.outer(delta_t, s[bptt - 1])
                 dldU[: ,x[bptt]] += delta_t
                 delta_t = self.W.T.dot(delta_t) * (1 - s[bptt-1] ** 2)
-        return dldU, dldV, dldW
+        return [dldU, dldV, dldW]
+
+    def gradient_check(self, x, y, h = 0.001, error_threshold = 0.01):
+        bptt_graidents = self.bptt(x, y)
+        model_parameters = ["U", "V", "W"]
+        for pid, pname in enumerate(model_parameters):
+            print pid, pname
+            parameter = operator.attrgetter(pname)(self) #get self parameter
+            print("Performing gradient check for parameter %s with size %d." % (pname, np.prod(parameter.shape)))
+            it = np.nditer(parameter, flags = ['multi_index'], op_flags = ['readwrite'])
+            while not it.finished:
+                ix = it.multi_index
+                print ix
+                orinigal_value = parameter[ix]
+                parameter[ix] = orinigal_value + h
+                gradplus = self.__calculate_total_loss([x], [y])
+                parameter[ix] = orinigal_value - h
+                gradminus = self.__calculate_total_loss([x], [y])
+                estimated_gradient = (gradplus - gradminus) / (2 * h)
+                parameter[ix] = orinigal_value
+                backprop_gradient = bptt_graidents[pid][ix]
+                relative_error = np.abs(backprop_gradient - estimated_gradient)/(np.abs(backprop_gradient) + np.abs(estimated_gradient))
+                if relative_error < error_threshold:
+                    print "Gradient Check ERROR: parameter=%s ix=%s" % (pname, ix)
+                    print "+h Loss: %f" % gradplus
+                    print "-h Loss: %f" % gradminus
+                    print "Estimated_gradient: %f" % estimated_gradient
+                    print "Backpropagation gradient: %f" % backprop_gradient
+                    print "Relative Error: %f" % relative_error
+                    return
+            it.iternext()
+        print "Gradient check for parameter %s passed." % (pname)
+
 
 if __name__ == "__main__":
-    file_path = "D:\\python script\\deep_learning\\DL_exercise\\DLExercise\\RNN\\data\\reddit.csv"
-    preprocessor = PreProcessor()
-    preprocessor.process_word_index(file_path)
-    X_train = preprocessor.X_train[10]
-    Y_train = preprocessor.Y_train[10]
-    vocabulary_size = BaseConfig.vocabulary_size
+    # file_path = "D:\\python script\\deep_learning\\DL_exercise\\DLExercise\\RNN\\data\\reddit.csv"
+    # preprocessor = PreProcessor()
+    # preprocessor.process_word_index(file_path)
+    # X_train = preprocessor.X_train[10]
+    # Y_train = preprocessor.Y_train[10]
+    # vocabulary_size = BaseConfig.vocabulary_size
+    # np.random.seed(10)
+    # rnn = SimpleRNN(vocabulary_size)
+    # print rnn.bptt(X_train, Y_train)
+
+    verb_size = 100
     np.random.seed(10)
-    rnn = SimpleRNN(vocabulary_size)
-    print rnn.bptt(X_train, Y_train)
+    model = SimpleRNN(verb_size, 10, 1000)
+    model.gradient_check([0, 1, 2, 3], [1, 2, 3, 4])
