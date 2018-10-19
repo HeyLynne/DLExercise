@@ -8,5 +8,5 @@ Tested on the python 2.7.14
 #### 20181019 RNN
 A simmple rnn network implemented with numpy.
 The loss function is  cross-entropy loss(https://en.wikipedia.org/wiki/Cross_entropy#Cross-entropy_error_function_and_logistic_regression)
-* Todo
-* implement the training process
+##### Todo
+* ~~implement the training process~~
