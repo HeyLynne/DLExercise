@@ -54,7 +54,7 @@ class SimpleRNN(object):
             L+=-1*np.sum(np.log(correct_word_predictions))
         return L
 
-    def calsulate_loss(self, x, y):
+    def calculate_loss(self, x, y):
         N = np.sum((len(y_i) for y_i in y))
         return self.__calculate_total_loss(x, y) / N
 
@@ -85,7 +85,6 @@ class SimpleRNN(object):
             it = np.nditer(parameter, flags = ['multi_index'], op_flags = ['readwrite'])
             while not it.finished:
                 ix = it.multi_index
-                print ix
                 orinigal_value = parameter[ix]
                 parameter[ix] = orinigal_value + h
                 gradplus = self.__calculate_total_loss([x], [y])
@@ -95,7 +94,7 @@ class SimpleRNN(object):
                 parameter[ix] = orinigal_value
                 backprop_gradient = bptt_graidents[pid][ix]
                 relative_error = np.abs(backprop_gradient - estimated_gradient)/(np.abs(backprop_gradient) + np.abs(estimated_gradient))
-                if relative_error < error_threshold:
+                if relative_error > error_threshold:
                     print "Gradient Check ERROR: parameter=%s ix=%s" % (pname, ix)
                     print "+h Loss: %f" % gradplus
                     print "-h Loss: %f" % gradminus
@@ -106,19 +105,44 @@ class SimpleRNN(object):
             it.iternext()
         print "Gradient check for parameter %s passed." % (pname)
 
+    def sgd(self, x, y, learning_rate):
+        dldU, dldV, dldW = self.bptt(x, y)
+        self.U -= learning_rate * dldU
+        self.V -= learning_rate * dldV
+        self.W -= learning_rate * dldW
 
-if __name__ == "__main__":
-    # file_path = "D:\\python script\\deep_learning\\DL_exercise\\DLExercise\\RNN\\data\\reddit.csv"
-    # preprocessor = PreProcessor()
-    # preprocessor.process_word_index(file_path)
-    # X_train = preprocessor.X_train[10]
-    # Y_train = preprocessor.Y_train[10]
-    # vocabulary_size = BaseConfig.vocabulary_size
-    # np.random.seed(10)
-    # rnn = SimpleRNN(vocabulary_size)
-    # print rnn.bptt(X_train, Y_train)
+def train_with_sgd(model, X, Y, learning_rate = 0.005, nepoch = 100, evaluate_loss_after = 5):
+    losses = []
+    num_examples = 0
+    for epoch in xrange(nepoch):
+        if epoch % evaluate_loss_after == 0:
+            loss = model.calculate_loss(X, Y)
+            losses.append((num_examples, loss))
+            if len(loss) > 1 and loss[-1][1] > loss[-2][1]:
+                learning_rate = learning_rate * 0.5
+                print "Setting learning rate to %f" % learning_rate
+            sys.stdout.flush()
+        for i in xrange(len(Y)):
+            model.sgd(X[i], Y[i], learning_rate)
+            num_examples += 1
 
+def test_gradient_check():
     verb_size = 100
     np.random.seed(10)
     model = SimpleRNN(verb_size, 10, 1000)
     model.gradient_check([0, 1, 2, 3], [1, 2, 3, 4])
+
+def test_bptt():
+    file_path = "\\data\\reddit.csv"
+    preprocessor = PreProcessor()
+    preprocessor.process_word_index(file_path)
+    X_train = preprocessor.X_train[10]
+    Y_train = preprocessor.Y_train[10]
+    vocabulary_size = BaseConfig.vocabulary_size
+    np.random.seed(10)
+    rnn = SimpleRNN(vocabulary_size)
+    print rnn.bptt(X_train, Y_train)
+
+if __name__ == "__main__":
+    test_bptt()
+    test_gradient_check()
